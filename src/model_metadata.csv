@@ -1,0 +1,20 @@
+code,name,description,include,order_1,order_2,highlight
+AVC5y,Average 5 year birth counts,,0,1,1,a
+AVC3y,Average 3 year birth counts,,0,2,2,a
+AVC7y,Average 7 year birth counts,,0,3,3,a
+AVR5y,Average 5 year birth rates,,0,4,4,a
+AVR3y,Average 3 year birth rates,,0,5,5,a
+AVR7y,Average 7 year birth rates,,0,6,6,a
+GLR5yl,Average 5 year birth rates with log linear trend,,1,7,7,b
+GLR3yl,Average 3 year birth rates with trend log linear trend,,1,8,8,b
+GLR7yl,Average 7 year birth rates with trend log linear trend,,1,9,9,b
+GLC3yl,Average 3 year birth counts with trend log linear trend,,1,10,10,b
+GLC5yl,Average 5 year birth counts with trend log linear trend,,1,11,11,b
+GLC7yl,Average 7 year birth counts with trend log linear trend,,1,12,12,b
+GLR5yq,Average 5 year birth rates with log linear-quadratic trend,,1,13,13,b
+GLR3yq,Average 3 year birth rates with trend log linear-quadratic trend,,1,14,14,b
+GLR7yq,Average 7 year birth rates with trend log linear-quadratic trend,,1,15,15,b
+GLC3yq,Average 3 year birth counts with trend log linear-quadratic trend,,1,16,16,b
+GLC5yq,Average 5 year birth counts with trend log linear-quadratic trend,,1,17,17,b
+GLC7yq,Average 7 year birth counts with trend log linear-quadratic trend,,1,18,18,b
+MAV,Average prediction across all models,,1,19,19,c

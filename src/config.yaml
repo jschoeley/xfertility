@@ -1,0 +1,12 @@
+forecast:
+  # number of months to forecast
+  forecast_n_months: 24
+  # month which starts test/prediction period
+  start_of_test_month: 11
+skeleton:
+  year:
+    min: 2020
+    max: 2023
+  month:
+    min: 1
+    max: 12

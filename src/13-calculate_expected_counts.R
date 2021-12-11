@@ -19,7 +19,8 @@ paths$input <- list(
   mod_def = 'tmp/mod_def.rds',
   mod_para = 'tmp/mod_para.rds',
   glob = 'src/00-global_objects.R',
-  data_cv = 'tmp/data_cv.rds'
+  data_cv = 'tmp/data_cv.rds',
+  model_metadata = 'src/model_metadata.csv'
 )
 paths$output <- list(
   tmpdir = paths$input$tmpdir,
@@ -38,6 +39,7 @@ mod_para <- readRDS(paths$input$mod_para)
 # constants
 cnst <- list()
 cnst <- within(cnst,{
+  model_metadata = read_csv(paths$input$model_metadata)
   # how many threads used to fit models?
   cpu_nodes = 14
   # how many draws from the posterior predictive distribution?
@@ -170,7 +172,7 @@ dat$fitted_models <-
     
     error = function(e) {
       cat(format(Sys.time(), '%Y-%m-%d %H:%M:%S'),
-          ' Error', x$region_lvl_2, ' on CV set ', x$cv_id,
+          ' Error on CV set ', x$cv_id,
           ' for ', x$model_id, ': ', geterrmessage(), '\n')
       # return same object as fitted model, but with NA predictions
       input_dat[,c('predicted',paste0('simulated', 1:cnst$ndraws))] <- NA
@@ -194,7 +196,12 @@ stopCluster(cnst$cl)
 # for each observation sample 500 posterior predictions
 # uniformly from the predictions of the various models
 dat$fitted_models_with_mav <-
-  dat$fitted_models %>% select(-data) %>%
+  dat$fitted_models %>%
+  left_join(
+    cnst$model_metadata %>% select(code, weight),
+    by = c('model_id' = 'code')
+  ) %>%
+  select(-data) %>%
   group_by(cv_id) %>%
   group_modify(~{
 
@@ -207,7 +214,9 @@ dat$fitted_models_with_mav <-
     predictions_by_model <-
       array(
         dim = c(n_rows, n_sim+1, n_models),
-        dimnames = list('obs_id' = obs_id, 'sim_id' = 0:n_sim, 'model_id' = unique_models)
+        dimnames = list('obs_id' = obs_id,
+                        'sim_id' = 0:n_sim,
+                        'model_id' = unique_models)
       )
     for (k in unique_models) {
       cat(cv_id, k,'\n')
@@ -216,9 +225,23 @@ dat$fitted_models_with_mav <-
       predictions_by_model[,,k] <- c(predicted_and_simulated)
     }
     # random index matrix selecting for each prediction
-    I <- matrix(
-      sample(1:n_models, n_rows*(n_sim+1), replace = TRUE), n_rows, (n_sim+1)
-    )
+    # I <- matrix(
+    #   sample(
+    #     1:n_models, n_rows*(n_sim+1), replace = TRUE,
+    #     prob = .x$weight
+    #   ),
+    #   n_rows, (n_sim+1)
+    # )
+    # weights sampled from dirichlet distribution
+    I <- matrix(NA, n_rows, (n_sim+1))
+    for (j in 2:(n_sim+1)) {
+      w <- c(MCMCpack::rdirichlet(1, .x$weight))
+      I[,j] <- sample(
+        1:n_models, n_rows, replace = TRUE,
+        prob = w
+      )
+    }
+
     # https://stackoverflow.com/a/39344780
     predictions_modelaveraged <- matrix(
       predictions_by_model[cbind(
@@ -230,6 +253,7 @@ dat$fitted_models_with_mav <-
     )
     prediction_names <- c('predicted', paste0('simulated', 1:n_sim))
     colnames(predictions_modelaveraged) <- prediction_names
+    predictions_modelaveraged[,1] <- rowMeans(predictions_modelaveraged, na.rm = TRUE)
     
     bind_rows(
       .x,

@@ -87,7 +87,7 @@ ModDef$CountGAM <- function (
   }
   # index of data used for fitting
   idx_fit <- idx_train & idx_years
-  
+
   # for each stratum, fit model, predict and simulate from model,
   # add results to df
   strata <- unique(df[[col_stratum]])

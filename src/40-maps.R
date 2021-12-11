@@ -36,7 +36,6 @@ config <- read_yaml(paths$input$config)
 cnst <- list(); cnst <- within(cnst, {
   map_limits = c(xmin = 25e5, xmax = 75e5, ymin = 13.5e5, ymax = 54.5e5)
   crs = 3035
-  n_sim = 100
   width = unit(8, 'cm')
   height = width*0.8375
 })

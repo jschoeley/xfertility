@@ -130,7 +130,8 @@ dat$monthly_births <-
   group_by(nuts2) %>%
   mutate(
     weeks_since_start = WeeksSinceOrigin(date, min(date))
-  )
+  ) %>%
+  ungroup()
 
 # Prepare cross-validation data sets ------------------------------
 
@@ -217,9 +218,23 @@ dat$monthly_births_cv <-
   # designate incomplete cv series
   mutate(cv_full_series = nuts2 %in% dat$country_selection) %>%
   # remove incomplete cv series
-  filter(cv_full_series | cv_id == 0) %>%
+  filter(cv_full_series | cv_id == 0
+  ) %>%
   arrange(cv_id, nuts2, date) %>%
   ungroup()
+
+# remove incomplete regions
+dat$exclude <-
+  dat$monthly_births_cv %>%
+  filter(cv_id == 0) %>%
+  group_by(nuts2) %>%
+  filter(year == 2019) %>%
+  summarise(missing = any(is.na(observed_births)|is.na(personmonths))) %>%
+  filter(missing) %>%
+  pull(nuts2)
+
+dat$monthly_births_cv <-
+  dat$monthly_births_cv %>% filter(nuts2 != dat$exclude)
 
 # Select and rename -----------------------------------------------
 

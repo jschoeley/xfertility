@@ -67,7 +67,7 @@ dat$residual_month <-
     region_lvl_2
   )
 
-# per-country w(m)ape of predicted counts weighted by date
+# per-region w(m)ape of predicted counts weighted by date
 dat$residual_month$wmape <-
   dat$residual_month$residual_raw %>%
   group_by(model_id, region_lvl_2) %>%
@@ -231,7 +231,7 @@ fig$errorbias_b <-
 # assemble multi-panel figure 3
 fig$errorbias <-
   fig$errorbias_a$fig +
-  labs(subtitle = 'a. Total annual births by NUTS-2', y = 'Model') +
+  labs(subtitle = 'a. Total births by NUTS-2', y = 'Model') +
   fig$errorbias_b$fig +
   labs(subtitle = 'b. Total monthly births by NUTS-2') +
   plot_layout(ncol = 2, byrow = TRUE)

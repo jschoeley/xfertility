@@ -18,7 +18,7 @@
 setwd('.')
 paths <- list()
 paths$output <- list(
-  mod_def = 'tmp/mod_def.rds'
+  mod_def = 'tmp/11-mod_def.rds'
 )
 
 ModDef <- list()

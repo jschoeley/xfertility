@@ -10,3 +10,5 @@ skeleton:
   month:
     min: 1
     max: 12
+# number of simulation runs
+ndraws: 5000

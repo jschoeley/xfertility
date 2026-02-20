@@ -3,6 +3,7 @@
 # Init ------------------------------------------------------------
 
 library(glue)
+library(qs)
 library(tidyverse)
 library(patchwork)
 library(yaml)
@@ -15,7 +16,7 @@ paths <- list()
 paths$input <- list(
   tmpdir = 'tmp',
   glob = 'src/00-global_objects.R',
-  fitted_models = 'tmp/expected_cv.rds',
+  fitted_models = 'out/14-expected_with_bms_sim.qs',
   config = 'src/config.yaml',
   model_metadata = 'src/model_metadata.csv'
 )
@@ -43,7 +44,7 @@ source(paths$input$glob)
 # Load data -------------------------------------------------------
 
 # load data for cross validation
-dat$fitted_models <- readRDS(paths$input$fitted_models)
+dat$fitted_models <- qread(paths$input$fitted_models)
 # fitted cross-validation series, only test data
 dat$cv_test <-
   dat$fitted_models %>%
@@ -108,7 +109,7 @@ PlotErrorsAndBias <- function (df_errors, error_measure, bias_measure, xlab) {
   
   require(tidyverse)
   
-  Format <- function (x) { formatC(x, format = 'f', digits = 1) }
+  Format <- function (x) { formatC(x, format = 'f', digits = 2) }
   
   observed_errors <-
     df_errors %>%
@@ -238,7 +239,7 @@ fig$errorbias <-
 fig$errorbias
 
 ExportFigure(
-  fig$errorbias, path = paths$output$out, filename = 'errorbias',
+  fig$errorbias, path = paths$output$out, filename = '30-errorbias',
   add_date = FALSE,
   device = 'pdf',
   width = figspec$fig_dims$width,

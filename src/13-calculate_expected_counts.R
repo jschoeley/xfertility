@@ -1,8 +1,12 @@
-# Fit expected deaths models
+# Fit expected birth models
+#
+# Fit all models specified in 12-parameterize_expected_count_models.R
+# across all cross-validation sets and predict from models.
 
 # Init ------------------------------------------------------------
 
 library(tidyverse)
+library(yaml)
 library(glue)
 library(foreach)
 library(doParallel)
@@ -16,16 +20,17 @@ setwd('.')
 paths <- list()
 paths$input <- list(
   tmpdir = 'tmp',
-  mod_def = 'tmp/mod_def.rds',
-  mod_para = 'tmp/mod_para.rds',
+  config = 'src/config.yaml',
+  mod_def = 'tmp/11-mod_def.rds',
+  mod_para = 'tmp/12-mod_para.rds',
   glob = 'src/00-global_objects.R',
-  data_cv = 'tmp/data_cv.rds',
+  data_cv = 'tmp/10-data_cv.rds',
   model_metadata = 'src/model_metadata.csv'
 )
 paths$output <- list(
   tmpdir = paths$input$tmpdir,
-  expected_cv = 'tmp/expected_cv.rds',
-  log = 'tmp/fitted_models_log.txt'
+  expected_cv = 'tmp/13-expected_cv_sim.rds',
+  log = 'tmp/13-fitted_models_log.txt'
 )
 
 # global functions and constants
@@ -39,11 +44,12 @@ mod_para <- readRDS(paths$input$mod_para)
 # constants
 cnst <- list()
 cnst <- within(cnst,{
+  config = read_yaml(paths$input$config)
   model_metadata = read_csv(paths$input$model_metadata)
   # how many threads used to fit models?
   cpu_nodes = 14
   # how many draws from the posterior predictive distribution?
-  ndraws = 500
+  ndraws = config$ndraws
 })
 
 dat <- list()
@@ -66,33 +72,6 @@ dat$fit_data <-
   nest(data = c(-cv_id)) %>%
   expand_grid(mod_para)
 
-# Define country specific parameters ------------------------------
-
-# here we specify country-specific exceptions from the default models.
-
-{
-
-  # # for Island average death count
-  # # estimate the average over 12 consecutive weeks
-  # idx <- with(dat$fit_data, model_id == 'AVC' & region_iso == 'IS')
-  # patched_model <- dat$fit_data[idx,][['model_para']][[1]]
-  # patched_model[['models']][[1]] <- formula(
-  #   deaths_observed ~ as.factor(((iso_week-1)/12)%/%1)
-  # )
-  # dat$fit_data[idx,][['model_para']] <- list(patched_model)
-  # 
-  # # for Island average death rate
-  # # estimate the average over 12 consecutive weeks
-  # idx <- with(dat$fit_data, model_id == 'AVR' & region_iso == 'IS')
-  # patched_model <- dat$fit_data[idx,][['model_para']][[1]]
-  # patched_model[['models']][[1]] <- formula(
-  #   deaths_observed ~ as.factor(((iso_week-1)/12)%/%1) +
-  #     offset(log(personweeks))
-  # )
-  # dat$fit_data[idx,][['model_para']] <- list(patched_model)
-  
-}
-
 # Fit models and predict ------------------------------------------
 
 # fit models
@@ -101,7 +80,7 @@ dat$fitted_models <-
   foreach(
     x = iter(dat$fit_data, by = 'row'),
     .combine = bind_rows,
-    .packages = c('dplyr', 'tidyr', 'INLA', 'mgcv')
+    .packages = c('dplyr', 'tidyr', 'mgcv')
   ) %dopar% {suppressPackageStartupMessages({
     
     cat(format(Sys.time(), '%Y-%m-%d %H:%M:%S'),
@@ -136,23 +115,23 @@ dat$fitted_models <-
         
       }
       
-      # fit LMM model
-      
-      if (x$model_class == 'lmm') {
-        
-        predictions <- ModDef$CountGAM(
-          df = input_dat,
-          formula = model_para$formula,
-          family = model_para$family,
-          col_sample = 'cv_sample',
-          col_stratum = 'region_lvl_1',
-          n_years_for_training = model_para$n_years_for_training,
-          col_year = 'year',
-          nsim = cnst$ndraws, simulate_beta = TRUE, simulate_y = TRUE,
-          method = 'REML'
-        )
-        
-      }
+      # # fit LMM model
+      # 
+      # if (x$model_class == 'lmm') {
+      # 
+      #   predictions <- ModDef$CountGAM(
+      #     df = input_dat,
+      #     formula = model_para$formula,
+      #     family = model_para$family,
+      #     col_sample = 'cv_sample',
+      #     col_stratum = 'region_lvl_1',
+      #     n_years_for_training = model_para$n_years_for_training,
+      #     col_year = 'year',
+      #     nsim = cnst$ndraws, simulate_beta = TRUE, simulate_y = TRUE,
+      #     method = 'REML'
+      #   )
+      # 
+      # }
       
       # return result if fitting succeeded
       
@@ -191,93 +170,16 @@ dat$fitted_models <-
 
 stopCluster(cnst$cl)
 
-# Perform model averaging -----------------------------------------
-
-# for each observation sample 500 posterior predictions
-# uniformly from the predictions of the various models
-dat$fitted_models_with_mav <-
-  dat$fitted_models %>%
-  left_join(
-    cnst$model_metadata %>% select(code, weight),
-    by = c('model_id' = 'code')
-  ) %>%
-  select(-data) %>%
-  group_by(cv_id) %>%
-  group_modify(~{
-
-    cv_id = .y[['cv_id']]
-    obs_id = .x[1,][['predictions']][[1]][['obs_id']]
-    n_rows = nrow(.x[1,][['predictions']][[1]])
-    n_sim = cnst$ndraws
-    unique_models = unique(.x$model_id)
-    n_models = length(unique_models)
-    predictions_by_model <-
-      array(
-        dim = c(n_rows, n_sim+1, n_models),
-        dimnames = list('obs_id' = obs_id,
-                        'sim_id' = 0:n_sim,
-                        'model_id' = unique_models)
-      )
-    for (k in unique_models) {
-      cat(cv_id, k,'\n')
-      predicted_and_simulated <-
-        as.matrix(.x[.x$model_id == k,][['predictions']][[1]][,c('predicted', paste0('simulated', 1:n_sim))])
-      predictions_by_model[,,k] <- c(predicted_and_simulated)
-    }
-    # random index matrix selecting for each prediction
-    # I <- matrix(
-    #   sample(
-    #     1:n_models, n_rows*(n_sim+1), replace = TRUE,
-    #     prob = .x$weight
-    #   ),
-    #   n_rows, (n_sim+1)
-    # )
-    # weights sampled from dirichlet distribution
-    I <- matrix(NA, n_rows, (n_sim+1))
-    for (j in 2:(n_sim+1)) {
-      w <- c(MCMCpack::rdirichlet(1, .x$weight))
-      I[,j] <- sample(
-        1:n_models, n_rows, replace = TRUE,
-        prob = w
-      )
-    }
-
-    # https://stackoverflow.com/a/39344780
-    predictions_modelaveraged <- matrix(
-      predictions_by_model[cbind(
-        rep(1:n_rows, n_sim+1),
-        rep(1:(n_sim+1), each = n_rows),
-        c(I)
-      )],
-      n_rows, n_sim+1
-    )
-    prediction_names <- c('predicted', paste0('simulated', 1:n_sim))
-    colnames(predictions_modelaveraged) <- prediction_names
-    predictions_modelaveraged[,1] <- rowMeans(predictions_modelaveraged, na.rm = TRUE)
-    
-    bind_rows(
-      .x,
-      tibble(
-        model_id = 'MAV', model_class = 'mav',
-        model_para = list(NA),
-        predictions = list(
-          cbind(
-            .x[1,][['predictions']][[1]] %>% select(-all_of(prediction_names)),
-            predictions_modelaveraged
-          ) %>% as_tibble()
-        ),
-        error_while_fit = FALSE
-      )          
-    )
-    
-  })
+dat$fitted_models <-
+  dat$fitted_models |>
+  select(-data)
 
 # Plot observed vs. fitted ----------------------------------------
 
-dat$fitted_models_with_mav %>%
+dat$fitted_models %>%
   filter(!error_while_fit) %>%
   unnest(predictions) %>%
-  #filter(region_lvl_2 == 'AT11') %>%
+  filter(region_lvl_2 == 'AT11') %>%
   group_by(region_lvl_2, model_id) %>%
   group_walk(~{
     
@@ -309,18 +211,20 @@ dat$fitted_models_with_mav %>%
     fig[[paste(.y[[1]], .y[[2]])]] <<-
       fig_dat %>%
       ggplot(aes(x = date)) +
-      geom_ribbon(aes(ymin = q05, ymax = q95),
-                  fill = 'grey70', color = NA) +
+      geom_ribbon(aes(x = date, ymin = q05, ymax = q95),
+                  fill = 'grey70', color = NA,
+                  data = . %>% filter(cv_sample == 'test')) +
       geom_point(aes(color = cv_sample, y = observed),
                  size = 0.3) +
-      geom_line(aes(y = predicted, alpha = cv_sample),
-                color = 'red') +
+      geom_line(aes(x = date, y = predicted, alpha = cv_sample),
+                color = 'red',
+                data = . %>% filter(cv_sample == 'test')) +
       scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
       scale_alpha_manual(values = c(training = 0.3, test = 1)) +
       scale_color_manual(values = figspec$colors$sample) +
       facet_grid(cv_id~'') +
       guides(color = 'none', alpha = 'none') +
-      figspec$MyGGplotTheme(grid = 'xy') +
+      figspec$MyGGplotTheme(grid = 'xy', panel_border = TRUE) +
       labs(
         x = NULL, y = 'Weekly Births',
         title = paste(.y[[1]], .y[[2]])
@@ -329,10 +233,10 @@ dat$fitted_models_with_mav %>%
 
 # Exports ---------------------------------------------------------
 
-saveRDS(dat$fitted_models_with_mav, file = paths$output$expected_cv)
+saveRDS(dat$fitted_models, file = paths$output$expected_cv)
 
 ggsave(
-  filename = 'fitted_vs_observed_cv.pdf',
+  filename = '13-fitted_vs_observed_cv.pdf',
   path = paths$output$tmpdir,
   plot = gridExtra::marrangeGrob(fig, nrow=1, ncol=1), 
   width = 15, height = 9

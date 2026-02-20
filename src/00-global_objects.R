@@ -278,6 +278,8 @@ MonthdateToDate <- function (year, month, monthday = 1) {
   make_date(year, month, monthday)
 }
 
+# Global functions error analysis ---------------------------------
+
 #' Calculate Excess Count Residuals and Residual Summaries
 #'
 #' @param df A data frame.
@@ -362,3 +364,184 @@ CountResiduals <-
     return(list(residual_raw = residual_raw, residual_summary = residual_summary))
     
   }
+
+# Global functions excess statistics ------------------------------
+
+#' Calculate Excess Statistics Over Year-Months
+#'
+#' @param X a time ordered data frame of observed and simulated counts
+#'  for a single region, sex, age group and model, 1 row per observation
+#' @param varnames_simulated a character vector identifying the columns
+#'   holding the simulated counts in X
+#' @param quantiles1 a named character vector of desired quantiles
+#' @param quantiles2 a named character vector of desired quantiles
+#'
+#' @return
+#'   a data frame of excess statistics
+GetExcessStatisticsByYearMonth <- function (X, varnames_simulated, quantiles1, quantiles2) {
+  
+  nsim <- length(varnames_simulated)
+  
+  # return data frame of row-wise quantiles over columns of X
+  Rowquantiles <- function (X, prob, type = 4, na.rm = TRUE) {
+    t(apply(X, 1, quantile, prob = prob, type = type, na.rm = na.rm))
+  }
+  
+  # observed counts
+  obs_t <- X$observed
+  # cumulative observed counts (at end of time interval)
+  obs_cum <- cumsum(obs_t)
+  
+  # simulated expected counts
+  xpc_t_sim <- as.matrix(X[,varnames_simulated])
+  # simulated cumulative expected counts
+  xpc_cum_sim <- apply(xpc_t_sim, 2, cumsum)
+  
+  # expected counts quantiles
+  xpc_t <- Rowquantiles(xpc_t_sim, quantiles1)
+  colnames(xpc_t) <- paste0('xpc_t_', names(quantiles1))
+  # cumulative expected counts quantiles
+  xpc_cum <- Rowquantiles(xpc_cum_sim, quantiles1)
+  colnames(xpc_cum) <- paste0('xpc_cum_', names(quantiles1))
+  
+  # excess thresholds
+  xtr_t <- Rowquantiles(xpc_t_sim, prob = quantiles2)
+  
+  # simulated excess counts type 1
+  xc1_t_sim <- obs_t-xpc_t_sim
+  xc1_cum_sim <- obs_cum-xpc_cum_sim
+  
+  # excess counts type 1 quantiles
+  xc1_t <- Rowquantiles(xc1_t_sim, quantiles1)
+  colnames(xc1_t) <- paste0('xc1_t_', names(quantiles1))
+  # cumulative counts type 1 quantiles
+  xc1_cum <- Rowquantiles(xc1_cum_sim, quantiles1)
+  colnames(xc1_cum) <- paste0('xc1_cum_', names(quantiles1))
+  
+  # excess counts type 2 quantiles (counts above threshold)
+  xc2_t <- obs_t-xtr_t
+  xc2_t[xc2_t < 0] <- 0
+  colnames(xc2_t) <- paste0('xc2_t_', names(quantiles2))
+  # cumulative excess counts type 2 quantiles
+  xc2_cum <- apply(xc2_t, 2, cumsum)
+  colnames(xc2_cum) <- paste0('xc2_cum_', names(quantiles2))
+  
+  # simulated expected counts 0 adjusted
+  xpc_t_sim_zad <- xpc_t_sim
+  xpc_t_sim_zad[xpc_t_sim_zad == 0] <- 1
+  # simulated cumulative expected counts 0 adjusted
+  xpc_cum_sim_zad <- xpc_cum_sim
+  xpc_cum_sim_zad[xpc_cum_sim_zad == 0] <- 1
+  
+  # simulated P-scores
+  psc_t_sim <- (obs_t-xpc_t_sim)/xpc_t_sim_zad
+  
+  # P-score quantiles
+  psc_t <- Rowquantiles(psc_t_sim, quantiles1, type = 7)
+  psc_t <- round(psc_t, digits = 3)
+  colnames(psc_t) <- paste0('psc_t_', names(quantiles1))
+  
+  # probability of direction in p score
+  psc_t_median <- apply(psc_t_sim, 1, median, na.rm = TRUE)
+  psc_t_pd <- apply(sign(psc_t_sim) == sign(psc_t_median), 1,
+                    function(X) sum(X)/nsim)
+  
+  # simulated cumulative P-scores
+  psc_cum_sim <- (obs_cum-xpc_cum_sim)/xpc_cum_sim_zad
+  
+  # cumulative P-score quantiles
+  psc_cum <- Rowquantiles(psc_cum_sim, quantiles1, type = 7)
+  psc_cum <- round(psc_cum, digits = 3)
+  colnames(psc_cum) <- paste0('psc_cum_', names(quantiles1))
+  
+  # probability of direction in cumulative p score
+  psc_cum_median <- apply(psc_cum_sim, 1, median, na.rm = TRUE)
+  psc_cum_pd <- apply(sign(psc_cum_sim) == sign(psc_cum_median), 1,
+                      function(X) sum(X)/nsim)
+  
+  timeseries_of_measures <-
+    cbind(
+      X[,c('year', 'month', 'exposure')],
+      obs_t, obs_cum,
+      xpc_t, xpc_cum,
+      xc1_t, xc1_cum,
+      xc2_t, xc2_cum,
+      psc_t, psc_cum,
+      psc_t_pd, psc_cum_pd
+    )
+  
+  return(timeseries_of_measures)
+  
+}
+
+#' Calculate Excess Statistics Over Periods
+#'
+#' @param X a time ordered data frame of observed and simulated counts
+#'  for a single region, sex, age group and model, 1 row per observation
+#' @param varnames_simulated a character vector identifying the columns
+#'   holding the simulated counts in X
+#' @param quantiles1 a named character vector of desired quantiles
+#' @param quantiles2 a named character vector of desired quantiles
+#'
+#' @return
+#'   a data frame of excess statistics
+GetExcessStatisticsByPeriod <- function (X, varnames_simulated, quantiles1, quantiles2) {
+
+  nsim <- length(varnames_simulated)
+  
+  # return data frame of row-wise quantiles over columns of X
+  Rowquantiles <- function (X, prob, type = 4, na.rm = TRUE) {
+    t(apply(X, 1, quantile, prob = prob, type = type, na.rm = na.rm))
+  }
+  
+  # observed counts
+  obs_t <- X$observed
+  
+  # simulated expected counts
+  xpc_t_sim <- as.matrix(X[,varnames_simulated])
+  
+  # expected counts quantiles
+  xpc_t <- Rowquantiles(xpc_t_sim, quantiles1)
+  colnames(xpc_t) <- paste0('xpc_t_', names(quantiles1))
+  
+  # excess thresholds
+  xtr_t <- Rowquantiles(xpc_t_sim, prob = quantiles2)
+  
+  # simulated excess counts type 1
+  xc1_t_sim <- obs_t-xpc_t_sim
+  
+  # excess counts type 1 quantiles
+  xc1_t <- Rowquantiles(xc1_t_sim, quantiles1)
+  colnames(xc1_t) <- paste0('xc1_t_', names(quantiles1))
+  
+  # excess counts type 2 quantiles (counts above threshold)
+  xc2_t <- obs_t-xtr_t
+  xc2_t[xc2_t < 0] <- 0
+  colnames(xc2_t) <- paste0('xc2_t_', names(quantiles2))
+  
+  # simulated expected counts 0 adjusted
+  xpc_t_sim_zad <- xpc_t_sim
+  xpc_t_sim_zad[xpc_t_sim_zad == 0] <- 1
+  
+  # simulated P-scores
+  psc_t_sim <- (obs_t-xpc_t_sim)/xpc_t_sim_zad
+  
+  # P-score quantiles
+  psc_t <- Rowquantiles(psc_t_sim, quantiles1, type = 7)
+  psc_t <- round(psc_t, digits = 3)
+  colnames(psc_t) <- paste0('psc_t_', names(quantiles1))
+  
+  # probability of direction in p score
+  psc_t_median <- apply(psc_t_sim, 1, median, na.rm = TRUE)
+  psc_t_pd <- apply(sign(psc_t_sim) == sign(psc_t_median), 1,
+                    function(X) sum(X)/nsim)
+  
+  timeseries_of_measures <-
+    cbind(
+      X[,c('period', 'exposure')],
+      obs_t, xpc_t, xc1_t, xc2_t, psc_t, psc_t_pd
+    )
+  
+  return(timeseries_of_measures)
+  
+}

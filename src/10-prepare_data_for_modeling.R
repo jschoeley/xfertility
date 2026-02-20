@@ -1,6 +1,6 @@
 # Prepare data for model fitting and cross-validation
 #
-# Find source data at N drive, NUTS2_data_fertility_rate_all.Rdat
+# Find source data at "~/Pandemicbabies/Revision2024/Data/NUTS2_data_fertility_rate_all_with_covid.Rdat"
 #
 # ## id variables
 #
@@ -10,33 +10,31 @@
 # - obs_id:
 #   identifies rows across CV series; 
 #   pattern: <region_iso, sex, age_start, iso_year, iso_week>
-# - stratum_id:
-#   identifies unique sex and age combinations
 #
 # ## strata
 #
-# - region_iso:
-#   ISO 3166-1 alpha-2 country code when region is nation state;
-#   ISO 3166-2 region code when region is subdivision of nation state
-# - iso_year:
-#   year as defined in ISO 8601 week date system
-# - iso_week:
-#   week as defined in ISO 8601 week date system [0, 52];
-#   leap-weeks 53 dropped
+# - region_lvl_1:
+#   ISO 3166-1 alpha-2 country code (NUTS-1)
+# - region_lvl_2:
+#   NUTS-2 region code
+# - year:
+#   numeric gregorian year
+# - month:
+#   numeric month (1) Jan to (12) Dec
+# - month_fac:
+#   month as a factor variable
 #
 # ## observations
 #
-# - deaths_observed:
-#   number of deaths from any cause
-# - population:
-#   population count (only observed in week containing January 1st)
-# - personweeks:
-#   person-weeks of exposure
+# - observed:
+#   number of observed births
+# - exposure:
+#   person months of exposure
 #
 # ## additional calendar variables
 #
 # - date:
-#   starting date of epi-week
+#   starting date of year-month
 # - origin_date:
 #   starting date of cv series
 # - origin_weeks:
@@ -46,27 +44,12 @@
 # - weeks_since_test_start:
 #   weeks since start of test
 #
-# ## additional region information
-# 
-# - region_name:
-#   natural name of region
-# - region_level:
-#   0 for nation state / country level, 1 for subdivision
-# - country_iso:
-#   ISO 3166-1 alpha-2 country code
-# - country_name:
-#   natural name of country
-# - hemisphere:
-#   (n)orth or (s)outh
-# - continent:
-#   continent of region
-#
 # ## flags
 #
 # - cv_sample:
 #   does this data point belong to the CV id's 'training' or 'test' set?
 # - cv_full_series:
-#   are complete 5 fold CV series available for this country?
+#   are all 4 CV series available for this region?
 #   'TRUE' or 'FALSE'
 
 # Init ------------------------------------------------------------
@@ -86,7 +69,7 @@ paths$input <- list(
 )
 paths$output <- list(
   tmpdir = paths$input$tmpdir,
-  data_cv = 'tmp/data_cv.rds'
+  data_cv = 'tmp/10-data_cv.rds'
 )
 
 # constants specific to this analysis
@@ -140,15 +123,15 @@ dat$monthly_births <-
 # test: [test_start, test_end]
 dat$cv_selection <-
   tibble(
-    cv_id = 1:5,
+    cv_id = 1:4,
     training_start =
       MonthdateToDate(
-        2007+0:4,
+        2006+seq(0, 6, 2),
         month = 1
       ),
     test_start =
       MonthdateToDate(
-        2012+0:4,
+        2011+seq(0, 6, 2),
         month = cnst$config$forecast$start_of_test_month
       ),
     test_end = 
@@ -160,7 +143,7 @@ dat$total_selection <-
     cv_id = 0,
     training_start =
       MonthdateToDate(
-        2007,
+        2006,
         month = 1
       ),
     test_start =
@@ -177,9 +160,9 @@ dat$selection <-
     dat$total_selection, dat$cv_selection
   )
 
-# countries with complete data for CV split
+# regions with complete data for CV split
 # complete means no missings in any of the "core" variables, i.e.
-# births & personmonths
+# births & person-months
 dat$country_selection <-
   dat$monthly_births %>%
   drop_na(observed_births, personmonths) %>%
@@ -187,7 +170,7 @@ dat$country_selection <-
   summarise(
     min_year = min(year)
   ) %>%
-  filter(min_year <= 2007) %>%
+  filter(min_year <= 2006) %>%
   pull(nuts2)
 
 # test-training data
@@ -233,8 +216,10 @@ dat$exclude <-
   filter(missing) %>%
   pull(nuts2)
 
-dat$monthly_births_cv <-
-  dat$monthly_births_cv %>% filter(nuts2 != dat$exclude)
+if (length(dat$exclude)>0) {
+  dat$monthly_births_cv <-
+    dat$monthly_births_cv %>% filter(nuts2 != dat$exclude)  
+}
 
 # Select and rename -----------------------------------------------
 
@@ -288,8 +273,9 @@ fig$training_test_split <-
   scale_color_manual(values = c(figspec$colors$sample)) +
   scale_size_manual(values = c(`TRUE` = 0.5, `FALSE` = 2)) +
   labs(
-    title = 'Data coverage and training-test split',
-    subtitle = 'Test grey, training red. Thin lines indicate NAs in death, exposure, holiday or temperature variables.'
+#    title = 'Data coverage and training-test split',
+#    subtitle = 'Test grey, training red. Thin lines indicate NAs in counts or exposure',
+    y = 'Cross-validation series'
   ) +
   figspec$MyGGplotTheme(panel_border = TRUE, grid = 'x', minor_grid = 'x')
 fig$training_test_split
@@ -299,6 +285,6 @@ fig$training_test_split
 saveRDS(dat$ready_for_export, file = paths$output$data_cv)
 
 ExportFigure(
-  fig$training_test_split, paths$output$tmpdir, 'training_test_split',
+  fig$training_test_split, paths$output$tmpdir, '10-training_test_split',
   device = 'pdf'
 )

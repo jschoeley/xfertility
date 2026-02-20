@@ -1,5 +1,35 @@
+pkgs <- c(
+  'qs',
+  'ggplot2',
+  'ISOweek',
+  'lubridate',
+  'purrr',
+  'showtext',
+  'tidyverse',
+  'yaml',
+  'MASS',
+  'mgcv',
+  'dplyr',
+  'doParallel',
+  'foreach',
+  'glue',
+  'gridExtra',
+  'readr',
+  'tidyr',
+  'prismatic',
+  'scales',
+  'patchwork',
+  'eurostat',
+  'RColorBrewer',
+  'rmapshaper',
+  'rnaturalearth',
+  'sf',
+  'coda',
+  'mcmc',
+  'MCMCpack'
+)
+
 install.packages(
-  'INLA',
-  repos = c(getOption('repos'), INLA = 'https://inla.r-inla-download.org/R/stable'),
+  pkgs,
   dep = TRUE
 )

@@ -14,7 +14,7 @@ library(dplyr)
 setwd('.')
 paths <- list()
 paths$output <- list(
-  mod_para = 'tmp/mod_para.rds'
+  mod_para = 'tmp/12-mod_para.rds'
 )
 
 # Specifications of models to test --------------------------------

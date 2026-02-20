@@ -1,4 +1,3 @@
-# Expected births estimates 2020/21 across European regions
+# Regional analysis of fertility shocks during the COVID-19 pandemic in Europe
 
-Natalie Nitsche (MPIDR) & Aiva Jasilioniene (MPIDR) & Maxi Kniffka (MPIDR) & Peng Li
-(MPIDR) & Mikko Myrskylä (MPIDR) & Jessica Nisén (MPIDR, University of Turku) and Jonas Schöley (MPIDR)
+This repository holds the code used to calculate excess and deficit births across European regions for the paper: Fertility in the Aftermath of the First and Second COVID-19 Waves Across European Regions.
